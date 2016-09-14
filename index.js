@@ -13,7 +13,7 @@ var crypto = require('crypto')
  * @private
  */
 function encodeValue(input) {
-  return input.replace(/&/g, '%26').replace(/%/g, '%25');
+  return input.replace(/[%&]/g, encodeURIComponent);
 }
 
 /**
@@ -59,6 +59,12 @@ function ShopifyToken(options) {
   this.apiKey = options.apiKey;
 }
 
+/**
+ * Generate a random nonce.
+ *
+ * @return {String} The random nonce
+ * @public
+ */
 ShopifyToken.prototype.generateNonce = function() {
   return crypto.randomBytes(16).toString('hex');
 };
@@ -68,17 +74,16 @@ ShopifyToken.prototype.generateNonce = function() {
  *
  * @param {String} shop The shop name
  * @param {Array|String} [scopes] The list of scopes
- * @param {String} Random string (ideally persisted elsewhere) for comparison on callback
+ * @param {String} [nonce] The nonce
  * @return {String} The authorization URL
  * @public
  */
 ShopifyToken.prototype.generateAuthUrl = function generateAuthUrl(shop, scopes, nonce) {
-  scopes = scopes || this.scopes;
-  nonce = nonce || this.generateNonce();
+  scopes || (scopes = this.scopes);
 
   var query = {
     scope: Array.isArray(scopes) ? scopes.join(',') : scopes,
-    state: nonce,
+    state: nonce || this.generateNonce(),
     redirect_uri: this.redirectUri,
     client_id: this.apiKey
   };
@@ -151,6 +156,7 @@ ShopifyToken.prototype.getAccessToken = function getAccessToken(shop, code, fn) 
     });
     response.on('end', function end() {
       var error;
+
       if (status !== 200) {
         error = new Error('Failed to get Shopify access token');
         error.responseBody = body;
@@ -163,6 +169,7 @@ ShopifyToken.prototype.getAccessToken = function getAccessToken(shop, code, fn) 
       } catch (e) {
         error = new Error('Failed to parse the response body');
         error.responseBody = body;
+        error.statusCode = status;
         return fn(error);
       }
 

@@ -1,4 +1,3 @@
-/* istanbul ignore next */
 describe('shopify-token', function () {
   'use strict';
 
@@ -7,7 +6,7 @@ describe('shopify-token', function () {
     , nock = require('nock')
     , url = require('url');
 
-  var shopifyToken = shopifyToken = new ShopifyToken({
+  var shopifyToken = new ShopifyToken({
     sharedSecret: 'foo',
     redirectUri: 'bar',
     apiKey: 'baz'
@@ -52,11 +51,20 @@ describe('shopify-token', function () {
     expect(shopifyToken.scopes).to.equal('read_content,write_content');
   });
 
+  describe('#generateNonce', function () {
+    it('generates a random nonce', function () {
+      var nonce = shopifyToken.generateNonce();
+
+      expect(nonce).to.be.a('string').and.have.length(32);
+    });
+  });
+
   describe('#generateAuthUrl', function () {
     it('builds the authorization URL', function () {
-      var uri = shopifyToken.generateAuthUrl('qux');
-      var nonce = url.parse(uri, true).query.state;
+      var uri = shopifyToken.generateAuthUrl('qux')
+        , nonce = url.parse(uri, true).query.state;
 
+      expect(nonce).to.be.a('string').and.have.length(32);
       expect(uri).to.equal(url.format({
         pathname: '/admin/oauth/authorize',
         hostname: 'qux.myshopify.com',
@@ -68,19 +76,20 @@ describe('shopify-token', function () {
           client_id: 'baz'
         }
       }));
-      expect(nonce).to.be.a('string').and.have.length(32);
     });
 
-    it('allows to override the default scopes and nonce', function () {
-      var uri = shopifyToken.generateAuthUrl('qux', 'read_themes,read_products', 'somenonce');
+    it('allows to override the default scopes', function () {
+      var uri = shopifyToken.generateAuthUrl('qux', 'read_themes,read_products')
+        , nonce = url.parse(uri, true).query.state;
 
+      expect(nonce).to.be.a('string').and.have.length(32);
       expect(uri).to.equal(url.format({
         pathname: '/admin/oauth/authorize',
         hostname: 'qux.myshopify.com',
         protocol: 'https:',
         query: {
           scope: 'read_themes,read_products',
-          state: 'somenonce',
+          state: nonce,
           redirect_uri: 'bar',
           client_id: 'baz'
         }
@@ -92,14 +101,32 @@ describe('shopify-token', function () {
         'read_products',
         'read_themes'
       ]);
+      var nonce = url.parse(uri, true).query.state;
 
+      expect(nonce).to.be.a('string').and.have.length(32);
       expect(uri).to.equal(url.format({
         pathname: '/admin/oauth/authorize',
         hostname: 'qux.myshopify.com',
         protocol: 'https:',
         query: {
           scope: 'read_products,read_themes',
-          state: url.parse(uri, true).query.state,
+          state: nonce,
+          redirect_uri: 'bar',
+          client_id: 'baz'
+        }
+      }));
+    });
+
+    it('allows to use a custom nonce', function () {
+      var uri = shopifyToken.generateAuthUrl('qux', undefined, 'corge');
+
+      expect(uri).to.equal(url.format({
+        pathname: '/admin/oauth/authorize',
+        hostname: 'qux.myshopify.com',
+        protocol: 'https:',
+        query: {
+          scope: 'read_content',
+          state: 'corge',
           redirect_uri: 'bar',
           client_id: 'baz'
         }
@@ -142,18 +169,21 @@ describe('shopify-token', function () {
       , hostname = 'qux.myshopify.com'
       , scope = nock('https://' + hostname);
 
+    afterEach(function () {
+      expect(scope.isDone()).to.be.true;
+    });
 
     it('exchanges the auth code for the access token', function (done) {
       var token = 'f85632530bf277ec9ac6f649fc327f17'
         , code = '4d732838ad8c22cd1d2dd96f8a403fb7';
 
       scope
-      .post(pathname, {
-        client_secret: 'foo',
-        client_id: 'baz',
-        code: code
-      })
-      .reply(200, { access_token: token });
+        .post(pathname, {
+          client_secret: 'foo',
+          client_id: 'baz',
+          code: code
+        })
+        .reply(200, { access_token: token });
 
       shopifyToken.getAccessToken(hostname, code, function (err, res) {
         if (err) return done(err);
@@ -167,8 +197,8 @@ describe('shopify-token', function () {
       var message = 'Something wrong happened';
 
       scope
-      .post(pathname)
-      .replyWithError(message);
+        .post(pathname)
+        .replyWithError(message);
 
       shopifyToken.getAccessToken(hostname, '123456', function (err, res) {
         expect(err).to.be.an.instanceof(Error);
@@ -179,14 +209,16 @@ describe('shopify-token', function () {
     });
 
     it('returns an error if response statusCode is not 200', function (done) {
+      var body = 'some error message from shopify';
+
       scope
-      .post(pathname)
-      .reply(400, 'some error message from shopify');
+        .post(pathname)
+        .reply(400, body);
 
       shopifyToken.getAccessToken(hostname, '123456', function (err, res) {
         expect(err).to.be.an.instanceof(Error);
         expect(err).to.have.property('message', 'Failed to get Shopify access token');
-        expect(err).to.have.property('responseBody', 'some error message from shopify');
+        expect(err).to.have.property('responseBody', body);
         expect(err).to.have.property('statusCode', 400);
         expect(res).to.equal(undefined);
         done();
@@ -194,14 +226,17 @@ describe('shopify-token', function () {
     });
 
     it('returns an error if JSON.parse throws', function (done) {
+      var body = '<!DOCTYPE html><html><head></head><body></body></html>';
+
       scope
-      .post(pathname)
-      .reply(200, '<!DOCTYPE html><html><head></head><body></body></html>');
+        .post(pathname)
+        .reply(200, body);
 
       shopifyToken.getAccessToken(hostname, '123456', function (err, res) {
         expect(err).to.be.an.instanceof(Error);
         expect(err).to.have.property('message', 'Failed to parse the response body');
-        expect(err).to.have.property('responseBody', '<!DOCTYPE html><html><head></head><body></body></html>');
+        expect(err).to.have.property('responseBody', body);
+        expect(err).to.have.property('statusCode', 200);
         expect(res).to.equal(undefined);
         done();
       });
