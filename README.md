@@ -37,6 +37,9 @@ Creates a new `ShopifyToken` instance.
 - `scopes` - Optional - An array of strings or a comma-separated string that
   specifies the list of scopes e.g. `'read_content,read_themes'`. Defaults to
   `'read_content'`.
+- `timeout` - Optional - A number that specifies the milliseconds to wait for
+  the server to send a response to the HTTPS request initiated by the
+  `getAccessToken` method before aborting it. Defaults to 60000, or 1 minute.
 
 #### Return value
 
@@ -75,7 +78,7 @@ console.log(nonce);
 // => 212a8b839860d1aefb258aaffcdbd63f
 ```
 
-### `shopifyToken.generateAuthUrl(shop[, scopes[, nonce]]);`
+### `shopifyToken.generateAuthUrl(shop[, scopes[, nonce]])`
 
 Builds and returns the authorization URL where you should redirect the user.
 
@@ -100,7 +103,7 @@ console.log(url);
 // => https://dolciumi.myshopify.com/admin/oauth/authorize?scope=read_content&state=7194ee27dd47ac9efb0ad04e93750e64&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fcallback&client_id=e74d25b9a6f2b15f2836c954ea8c1711
 ```
 
-### `shopifyToken.verifyHmac(query)`;
+### `shopifyToken.verifyHmac(query)`
 
 Every request or redirect from Shopify to the client server includes a hmac
 parameter that can be used to ensure that it came from Shopify. This method
@@ -143,7 +146,7 @@ Exchanges the authorization code for a permanent access token.
   passed by Shopify in the confirmation redirect.
 - `fn(err, token)` - An error-first callback function which is called when the
   token has been exchanged or an error occurs. When the exchange fails, you can
-  read the HTTP response status code and body from the `statusCode` and
+  read the HTTPS response status code and body from the `statusCode` and
   `responseBody` properties which are added to the error object.
 
 #### Return value
